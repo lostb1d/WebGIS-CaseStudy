@@ -40,7 +40,7 @@ const dummyInfrastructure = {
     ],
     government: [
         {name: "Singha Durbar", lat: 27.6980, lng: 85.3174, type: "government"},
-        {name: "District Administration Office Kathmandu", lat: 27.7058, lng: 85.3147, type: "government"},
+        {name: "Emergency Operations Center", lat: 27.7058, lng: 85.3147, type: "government"},
         {name: "Nepal Police Headquarters", lat: 27.7172, lng: 85.3240, type: "government"},
         {name: "Central Bureau of Statistics", lat: 27.6850, lng: 85.3178, type: "government"},
         {name: "Department of Roads", lat: 27.6956, lng: 85.3158, type: "government"}
@@ -306,13 +306,14 @@ function loadInfrastructure() {
     if (document.getElementById('roadCheck').checked) map.addLayer(roadsLayer);
 }
 
-// Function to analyze infrastructure at risk with prioritization
+// Function to analyze infrastructure at risk with earthquake-focused buffers
 function analyzeInfrastructure() {
     const magnitudeFilter = parseFloat(document.getElementById('magnitudeRange').value);
     const distanceFilter = parseFloat(document.getElementById('distanceFilter').value);
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     
+    // Filter earthquakes by magnitude and date range
     const filteredQuakes = currentEarthquakeData.filter(quake => {
         const quakeDate = new Date(quake.properties.time).toISOString().split('T')[0];
         return quake.properties.mag >= magnitudeFilter && 
@@ -325,6 +326,7 @@ function analyzeInfrastructure() {
         return;
     }
     
+    // Get selected infrastructure types
     const includedTypes = [];
     if (document.getElementById('hospitalCheck').checked) includedTypes.push('hospital');
     if (document.getElementById('schoolCheck').checked) includedTypes.push('school');
@@ -339,49 +341,86 @@ function analyzeInfrastructure() {
     const filteredInfra = currentInfrastructureData.filter(infra => includedTypes.includes(infra.type));
     const atRiskInfrastructure = [];
     
-    filteredQuakes.forEach(quake => {
+    // Clear previous buffers
+    if (bufferLayer) map.removeLayer(bufferLayer);
+    
+    // Create earthquake buffers first
+    const quakeBuffers = filteredQuakes.map(quake => {
         const quakeCoords = quake.geometry.coordinates;
         const quakePoint = turf.point([quakeCoords[0], quakeCoords[1]]);
-        const buffer = turf.buffer(quakePoint, distanceFilter, {units: 'kilometers'});
+        return {
+            buffer: turf.buffer(quakePoint, distanceFilter, {units: 'kilometers'}),
+            quake: quake
+        };
+    });
+    
+    // Add all buffers to map
+    bufferLayer = L.geoJSON(turf.featureCollection(quakeBuffers.map(qb => qb.buffer)), {
+        style: {
+            color: '#ff7800',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.1
+        }
+    }).addTo(map);
+    
+    // Now check which infrastructure falls within any earthquake buffer
+    filteredInfra.forEach(infra => {
+        const infraPoint = turf.point([infra.lng, infra.lat]);
+        let closestQuake = null;
+        let minDistance = Infinity;
         
-        if (bufferLayer) map.removeLayer(bufferLayer);
-        bufferLayer = L.geoJSON(buffer, {
-            style: {
-                color: '#ff7800',
-                weight: 2,
-                opacity: 1,
-                fillOpacity: 0.1
-            }
-        }).addTo(map);
-        
-        filteredInfra.forEach(infra => {
-            const infraPoint = turf.point([infra.lng, infra.lat]);
-            const distance = turf.distance(quakePoint, infraPoint, {units: 'kilometers'});
-            
-            if (distance <= distanceFilter) {
-                let priorityScore = 0;
-                if (infra.type === 'hospital' && quake.properties.mag > 5.0) {
-                    priorityScore = 100 + quake.properties.mag * 10;
-                } else if (infra.type === 'hospital') {
-                    priorityScore = 50 + quake.properties.mag * 5;
-                } else if (infra.type === 'government') {
-                    priorityScore = 30 + quake.properties.mag * 3;
-                } else {
-                    priorityScore = quake.properties.mag;
-                }
+        // Find the closest earthquake and its buffer that contains this infrastructure
+        quakeBuffers.forEach(qb => {
+            if (turf.booleanPointInPolygon(infraPoint, qb.buffer)) {
+                const distance = turf.distance(
+                    turf.point([qb.quake.geometry.coordinates[0], qb.quake.geometry.coordinates[1]]),
+                    infraPoint,
+                    {units: 'kilometers'}
+                );
                 
-                atRiskInfrastructure.push({
-                    type: infra.type,
-                    name: infra.name,
-                    distance: distance.toFixed(1),
-                    quakeMag: quake.properties.mag,
-                    quakePlace: quake.properties.place,
-                    quakeTime: new Date(quake.properties.time).toLocaleString(),
-                    coordinates: [infra.lat, infra.lng],
-                    priorityScore: priorityScore
-                });
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestQuake = qb.quake;
+                }
             }
         });
+        
+        if (closestQuake) {
+            // Priority scoring
+            let priorityScore = 0;
+            const isHighMagnitude = closestQuake.properties.mag > 5.0;
+            
+            if (infra.type === 'hospital') {
+                priorityScore = isHighMagnitude ? 200 + (closestQuake.properties.mag * 15) 
+                                             : 100 + (closestQuake.properties.mag * 8);
+            } 
+            else if (infra.type === 'government' && infra.name.toLowerCase().includes('emergency')) {
+                priorityScore = isHighMagnitude ? 150 + (closestQuake.properties.mag * 12)
+                                             : 80 + (closestQuake.properties.mag * 6);
+            }
+            else if (infra.type === 'government') {
+                priorityScore = 50 + (closestQuake.properties.mag * 3);
+            } 
+            else {
+                priorityScore = closestQuake.properties.mag * 2;
+            }
+            
+            // Additional score adjustment based on distance
+            priorityScore += (distanceFilter - minDistance) * 2;
+            
+            atRiskInfrastructure.push({
+                type: infra.type,
+                name: infra.name,
+                distance: minDistance.toFixed(1),
+                quakeMag: closestQuake.properties.mag,
+                quakePlace: closestQuake.properties.place,
+                quakeTime: new Date(closestQuake.properties.time).toLocaleString(),
+                coordinates: [infra.lat, infra.lng],
+                priorityScore: Math.round(priorityScore),
+                isCritical: infra.type === 'hospital' && isHighMagnitude
+            });
+        }
     });
     
     displayPrioritizedResults(atRiskInfrastructure);
@@ -399,26 +438,30 @@ function displayPrioritizedResults(results) {
         return;
     }
     
+    // Sort by priority score (highest first)
     results.sort((a, b) => b.priorityScore - a.priorityScore);
     
+    // Count infrastructure types
     const hospitalCount = results.filter(r => r.type === 'hospital').length;
-    const highPriorityHospitals = results.filter(r => r.type === 'hospital' && r.quakeMag > 5.0).length;
+    const criticalHospitals = results.filter(r => r.isCritical).length;
+    const emergencyServices = results.filter(r => r.type === 'government' && r.name.toLowerCase().includes('emergency')).length;
     const schoolCount = results.filter(r => r.type === 'school').length;
     const govCount = results.filter(r => r.type === 'government').length;
     const roadCount = results.filter(r => r.type === 'road').length;
     
+    // Update summary display
     summaryResults.innerHTML = `
         <h6 class="fw-bold">Infrastructure at Risk</h6>
         <div class="d-flex flex-wrap gap-2 mb-2">
             <span class="badge bg-primary">Total: ${results.length}</span>
             <span class="badge bg-danger">Hospitals: ${hospitalCount}</span>
+            ${emergencyServices > 0 ? `<span class="badge bg-danger">Emergency Services: ${emergencyServices}</span>` : ''}
             <span class="badge bg-warning text-dark">Schools: ${schoolCount}</span>
-            <span class="badge" style="background-color: #6f42c1;">Gov: ${govCount}</span>
         </div>
-        ${highPriorityHospitals > 0 ? `
+        ${criticalHospitals > 0 ? `
         <div class="alert alert-danger p-2 mb-2">
             <i class="bi bi-exclamation-triangle-fill me-1"></i>
-            <strong>Critical Priority:</strong> ${highPriorityHospitals} hospitals near high-magnitude earthquakes (M > 5.0)
+            <strong>Critical Priority:</strong> ${criticalHospitals} hospitals near high-magnitude earthquakes (M > 5.0)
         </div>
         ` : ''}
         ${hospitalCount > 0 ? `
@@ -429,17 +472,24 @@ function displayPrioritizedResults(results) {
         ` : ''}
     `;
     
+    // Clear previous results
     resultsBody.innerHTML = '';
+    
+    // Populate results table
     results.forEach(result => {
         const row = document.createElement('tr');
         
+        // Determine icon and row styling
         let icon, rowClass = '';
-        if (result.type === 'hospital' && result.quakeMag > 5.0) {
-            icon = '<i class="bi bi-hospital text-danger"></i>';
+        if (result.isCritical) {
+            icon = '<i class="bi bi-hospital-fill text-danger"></i>';
             rowClass = 'table-danger';
         } else if (result.type === 'hospital') {
             icon = '<i class="bi bi-hospital text-warning"></i>';
             rowClass = 'table-warning';
+        } else if (result.type === 'government' && result.name.toLowerCase().includes('emergency')) {
+            icon = '<i class="bi bi-activity text-danger"></i>';
+            rowClass = 'table-danger';
         } else if (result.type === 'school') {
             icon = '<i class="bi bi-book text-primary"></i>';
         } else if (result.type === 'government') {
@@ -448,10 +498,10 @@ function displayPrioritizedResults(results) {
             icon = '<i class="bi bi-signpost" style="color: #20c997;"></i>';
         }
         
-        const priorityBadge = result.type === 'hospital' ? 
-            `<span class="badge bg-${result.quakeMag > 5.0 ? 'danger' : 'warning'}">
-                ${result.quakeMag > 5.0 ? 'Critical' : 'High'} Priority
-            </span>` : '';
+        // Create priority badge
+        const priorityBadge = result.isCritical ? 
+            '<span class="badge bg-danger">Critical Priority</span>' :
+            (result.type === 'hospital' ? '<span class="badge bg-warning">High Priority</span>' : '');
         
         row.innerHTML = `
             <td class="${rowClass}">${icon} ${result.type}</td>
@@ -464,20 +514,24 @@ function displayPrioritizedResults(results) {
                 ${result.quakePlace}
             </td>
         `;
+        
+        // Add click handler to zoom to location
         row.addEventListener('click', () => {
             map.setView(result.coordinates, 14);
+            // Highlight the specific buffer
             if (bufferLayer) map.removeLayer(bufferLayer);
             const quakePoint = turf.point([result.coordinates[1], result.coordinates[0]]);
             const buffer = turf.buffer(quakePoint, parseFloat(document.getElementById('distanceFilter').value), {units: 'kilometers'});
             bufferLayer = L.geoJSON(buffer, {
                 style: {
                     color: '#ff7800',
-                    weight: 2,
+                    weight: 3,  // Thicker border for highlighted buffer
                     opacity: 1,
-                    fillOpacity: 0.1
+                    fillOpacity: 0.15
                 }
             }).addTo(map);
         });
+        
         resultsBody.appendChild(row);
     });
     
