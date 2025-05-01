@@ -1,0 +1,197 @@
+:root {
+    --primary-color: #0d6efd;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.sidebar-content {
+    height: 100%;
+    scrollbar-width: thin;
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    transition: opacity 0.3s ease;
+}
+
+.loading-overlay p {
+    margin-top: 1rem;
+    font-weight: 500;
+}
+
+.card {
+    border: none;
+    border-radius: 0.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
+}
+
+.card-header {
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+    padding: 0.75rem 1rem;
+}
+
+.form-range::-webkit-slider-thumb {
+    background: var(--primary-color);
+}
+
+.form-range::-moz-range-thumb {
+    background: var(--primary-color);
+}
+
+.form-range::-ms-thumb {
+    background: var(--primary-color);
+}
+
+/* Infrastructure markers */
+.hospital-icon {
+    background-color: var(--danger-color);
+    color: white;
+    border-radius: 50%;
+    width: 24px !important;
+    height: 24px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.75rem;
+}
+
+.school-icon {
+    background-color: var(--warning-color);
+    color: #212529;
+    border-radius: 50%;
+    width: 24px !important;
+    height: 24px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.75rem;
+}
+
+.gov-icon {
+    background-color: #6f42c1;
+    color: white;
+    border-radius: 50%;
+    width: 24px !important;
+    height: 24px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.75rem;
+}
+
+.road-icon {
+    background-color: #20c997;
+    color: white;
+    border-radius: 50%;
+    width: 24px !important;
+    height: 24px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.75rem;
+}
+
+/* Legend */
+.legend {
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+    line-height: 1.5;
+    font-size: 0.875rem;
+}
+
+.legend h6 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.legend i {
+    width: 16px;
+    height: 16px;
+    float: left;
+    margin-right: 8px;
+    border-radius: 50%;
+}
+
+/* Results table */
+#resultsTable th {
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#resultsTable td {
+    font-size: 0.85rem;
+    vertical-align: middle;
+}
+
+#resultsTable tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#resultsTable tr:hover {
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .row {
+        flex-direction: column;
+    }
+    
+    #map {
+        height: 60vh;
+    }
+    
+    .sidebar-content {
+        height: 40vh;
+    }
+}
+
+/* Animation for analysis button */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+#analyzeBtn:active {
+    animation: pulse 0.3s ease;
+}

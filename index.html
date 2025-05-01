@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nepal Earthquake Risk Assessment</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container-fluid g-0 h-100">
+        <div class="row g-0 h-100">
+            <!-- Map Column -->
+            <div class="col-lg-8 h-100 position-relative">
+                <div id="map"></div>
+                <div id="loadingOverlay" class="loading-overlay">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading earthquake data...</p>
+                </div>
+            </div>
+            
+            <!-- Sidebar Column -->
+            <div class="col-lg-4 h-100 d-flex flex-column bg-light">
+                <div class="sidebar-content p-3 overflow-auto">
+                    <header class="mb-4 text-center">
+                        <h1 class="h4 fw-bold text-primary">
+                            <i class="bi bi-geo-alt-fill me-2"></i>Nepal Seismic Risk Assessment
+                        </h1>
+                        <p class="text-muted small">Identify critical infrastructure at risk from earthquakes</p>
+                    </header>
+
+                    <!-- Earthquake Filters Card -->
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h2 class="h6 mb-0">Earthquake Filters</h2>
+                            <i class="bi bi-sliders"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="magnitudeRange" class="form-label">
+                                    Minimum Magnitude: <span class="badge bg-primary" id="magnitudeValue">3.0+</span>
+                                </label>
+                                <input type="range" class="form-range" id="magnitudeRange" min="3" max="8" step="0.1" value="3">
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col">
+                                    <label for="startDate" class="form-label">Start Date</label>
+                                    <input type="date" class="form-control" id="startDate" value="2018-01-01">
+                                </div>
+                                <div class="col">
+                                    <label for="endDate" class="form-label">End Date</label>
+                                    <input type="date" class="form-control" id="endDate">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="distanceFilter" class="form-label">Risk Radius (km)</label>
+                                <input type="number" class="form-control" id="distanceFilter" min="1" max="100" value="20">
+                            </div>
+                            <button id="applyFilters" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel-fill me-2"></i>Apply Filters
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Infrastructure Analysis Card -->
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                            <h2 class="h6 mb-0">Infrastructure Analysis</h2>
+                            <i class="bi bi-building"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Select Infrastructure Types:</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <div class="form-check form-check-inline flex-grow-1">
+                                        <input class="form-check-input" type="checkbox" id="hospitalCheck" checked>
+                                        <label class="form-check-label" for="hospitalCheck">
+                                            <i class="bi bi-hospital me-1"></i>Hospitals
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline flex-grow-1">
+                                        <input class="form-check-input" type="checkbox" id="schoolCheck" checked>
+                                        <label class="form-check-label" for="schoolCheck">
+                                            <i class="bi bi-book me-1"></i>Schools
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline flex-grow-1">
+                                        <input class="form-check-input" type="checkbox" id="govCheck" checked>
+                                        <label class="form-check-label" for="govCheck">
+                                            <i class="bi bi-bank me-1"></i>Government
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline flex-grow-1">
+                                        <input class="form-check-input" type="checkbox" id="roadCheck">
+                                        <label class="form-check-label" for="roadCheck">
+                                            <i class="bi bi-signpost me-1"></i>Roads
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="analyzeBtn" class="btn btn-danger w-100">
+                                <i class="bi bi-lightning-charge-fill me-2"></i>Run Risk Analysis
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Results Card -->
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                            <h2 class="h6 mb-0">At-Risk Infrastructure</h2>
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </div>
+                        <div class="card-body">
+                            <div id="summaryResults" class="mb-3 p-3 bg-light rounded">
+                                <p class="text-muted mb-0 text-center">
+                                    <i class="bi bi-info-circle me-1"></i>Run analysis to identify vulnerable infrastructure
+                                </p>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover" id="resultsTable" style="display: none;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Name</th>
+                                            <th>Distance</th>
+                                            <th>Earthquake</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="resultsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
